@@ -17,9 +17,13 @@ blobref="tsa-blobs" # tsa = time stamp authority
 OUTPUT_DATE_FORMAT="%Y-%m-%d %H:%M:%S %z"
 TSA_DATE_FORMAT="%b %d %H:%M:%S %Y GMT"
 GIT_DATE_FORMAT="%Y-%m-%d %H:%M:%S %z"
+SEPARATOR="--------------------------------------------------------------------------------"
+# Content-type and Accept type need to be included in the request header
+# when connecting to the timestamp service.
+CONTENT_TYPE="Content-Type: application/timestamp-query"
+ACCEPT_TYPE="Accept: application/timestamp-reply"
 
-# Make sure the script was called from within a Git repo.  Ignore
-# stdout.
+# Make sure the script was called from within a Git repo. Ignore stdout.
 git rev-parse --show-toplevel > /dev/null
 
 # Start with flags set to false
@@ -39,8 +43,8 @@ prep() {
         rev="HEAD"
     fi
 
-    # Run git rev-parse since it will expand HEAD and shortend hashes for
-    # us.
+    # Run git rev-parse since it will expand HEAD and shortend hashes
+    # for us.
     rev="$(git rev-parse "$rev")"
 
     # Figure out if the timestamp note exists.
@@ -79,11 +83,11 @@ examine() {
         timestamp="$(git notes --ref="$blobref" show "$rev")"
         text="$(echo "$timestamp" | openssl enc -d -base64 | openssl ts -reply -in /dev/stdin -text)"
 
-        echo "--------------------------------------------------------------------------------"
+        echo "$SEPARATOR"
         echo "Revision: ${rev}$(print_local_timestamp)"
-        echo "--------------------------------------------------------------------------------"
+        echo "$SEPARATOR"
         echo "$text"
-        echo "--------------------------------------------------------------------------------"
+        echo "$SEPARATOR"
     else
         echo "$(print_rev)$(print_local_timestamp) No trusted timestamp."
     fi
@@ -122,11 +126,6 @@ create() {
     if $delay_next; then
         sleep $request_delay
     fi
-
-    # Content-type and Accept type need to be included in the request header
-    # when connecting to the timestamp service.
-    CONTENT_TYPE="Content-Type: application/timestamp-query"
-    ACCEPT_TYPE="Accept: application/timestamp-reply"
 
     # Create the timestamp request using the specified revision as a digest.  The
     # sha1 hashes Git uses for revisions are already in the correct format.  The
