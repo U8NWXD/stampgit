@@ -55,15 +55,13 @@ print_rev() {
 
 print_signed_timestamp() {
     tsatime="$(echo "$1" | grep -i "time stamp:" | cut -c13-)"
-    echo -e "\t$(date -d "$tsatime" +"SIGNED-%d-%b-%Y")"
-    #echo "$(date -d "$tsatime" --iso-8601=minutes)"
-    #echo "$(date -d "$tsatime" +"%Y-%m-%d-%T-%Z")"
+    echo -e " $(date -j -f "%b %d %H:%M:%S %Y GMT" "$tsatime" +"SIGNED-%d-%b-%Y")"
 }
 
 print_local_timestamp() {
     if $ltime; then
         ctime="$(git log --pretty=format:"%ad" --date=iso "$rev" -1)"
-        echo -e "\t$(date -d "$ctime" +"COMMITTED-%d-%b-%Y")"
+        echo -e " $(date -j -f "%Y-%m-%d %H:%M:%S %z" "$ctime" +"COMMITTED-%d-%b-%Y")"
     fi
 }
 
@@ -80,7 +78,7 @@ examine() {
         echo "$text"
         echo "--------------------------------------------------------------------------------"
     else
-        echo "$(print_rev)$(print_local_timestamp)\tNo trusted timestamp."
+        echo "$(print_rev)$(print_local_timestamp) No trusted timestamp."
     fi
 }
 
@@ -88,14 +86,16 @@ examine() {
 # re-verifies it, and outputs short info about the verified timestamp.
 verify() {
     if ! $note; then
-        echo -e "$(print_rev)$(print_local_timestamp)\tNo trusted timestamp."
+        echo -e "$(print_rev)$(print_local_timestamp) No trusted timestamp."
         return 0
     fi
 
     timestamp="$(git notes --ref="$blobref" show "$rev")"
     text="$(echo "$timestamp" | openssl enc -d -base64 | openssl ts -reply -in /dev/stdin -text)"
+    data_path=$(mktemp)
+    echo "$rev" > $data_path
     echo "$timestamp" | openssl enc -d -base64 \
-        | openssl ts -verify -digest "$rev" -in /dev/stdin -CAfile "$cafile"  > /dev/null 2>&1
+        | openssl ts -verify -data "$data_path" -in /dev/stdin -CAfile "$cafile"  > /dev/null
 
     echo -e "$(print_rev)$(print_local_timestamp)$(print_signed_timestamp "$text")"
 }
@@ -130,15 +130,18 @@ create() {
     #
     # The data is base64 encoded and temporarily stored in the TSREPLY variable so
     # the timestamp can be verified before storing it in Git notes.
-    timestamp=$(openssl ts -query -cert -digest "$rev" -sha1 \
-        | curl -s -H "$CONTENT_TYPE" -H "$ACCEPT_TYPE" --data-binary @- "$url" \
+    timestamp=$(echo "$rev" \
+        | openssl ts -query -cert -sha512 -data /dev/stdin \
+        | curl -sH "$CONTENT_TYPE" --data-binary @- "$url" \
         | openssl enc -base64)
 
     # Verify the reply to make sure the timestamp is valid.  We don't want to add
     # invalid timestamps to Git notes since an invalid timestamp has no value.
+    data_path=$(mktemp)
+    echo "$rev" > $data_path
     echo "$timestamp" \
         | openssl enc -d -base64 \
-        | openssl ts -verify -digest "$rev" -in /dev/stdin -CAfile "$cafile"  > /dev/null 2>&1
+        | openssl ts -verify -data "$data_path" -in /dev/stdin -CAfile "$cafile" > /dev/null
 
     # Put the base64 encoded blob into the $BLOBblobref namespace.
     echo "$timestamp" | git notes --ref="$blobref" add "$rev" --file -
@@ -147,7 +150,7 @@ create() {
     # timestamp using the blob we just added to the $blobref
     # namespace.
     git notes --ref="$blobref" show "$rev" | openssl enc -d -base64 \
-        | openssl ts -verify -digest "$rev" -in /dev/stdin -CAfile "$cafile"  > /dev/null 2>&1
+        | openssl ts -verify -data "$data_path" -in /dev/stdin -CAfile "$cafile"  > /dev/null
 
     # Get the text version of the reply
     text="$(echo "$timestamp" | openssl enc -d -base64 | openssl ts -reply -in /dev/stdin -text)"
@@ -159,13 +162,13 @@ create() {
 # This removes the verified timestamp for the current revision.
 remove() {
     if ! $note; then
-        echo -e "$(print_rev)$(print_local_timestamp)\tNo trusted timestamp. Skipping."
+        echo -e "$(print_rev)$(print_local_timestamp) No trusted timestamp. Skipping."
         return 0
     fi
 
     git notes --ref="$blobref" remove "$rev" > /dev/null 2>&1
 
-    echo -e "$(print_rev)$(print_local_timestamp)\tTrusted timestamp removed."
+    echo -e "$(print_rev)$(print_local_timestamp) Trusted timestamp removed."
 }
 
 push() {
