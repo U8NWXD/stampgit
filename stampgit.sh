@@ -11,7 +11,7 @@ set -e
 
 # Config variables.
 url="http://timestamp.digicert.com"
-if readlink "$0"; then
+if readlink "$0" > /dev/null; then
     script_path=$(readlink "$0")
 else
     script_path="$0"
