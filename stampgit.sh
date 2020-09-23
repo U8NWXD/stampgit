@@ -11,7 +11,12 @@ set -e
 
 # Config variables.
 url="http://timestamp.digicert.com"
-cafile="$(dirname "$0")/chain.pem"
+if readlink "$0"; then
+    script_path=$(readlink "$0")
+else
+    script_path="$0"
+fi
+cafile="$(dirname "$script_path")/chain.pem"
 request_delay=15 # COMODO asks for this in scripts.
 blobref="tsa-blobs" # tsa = time stamp authority
 OUTPUT_DATE_FORMAT="%Y-%m-%d %H:%M:%S %z"
