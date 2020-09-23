@@ -14,6 +14,9 @@ url="http://timestamp.digicert.com"
 cafile="chain.pem"
 request_delay=15 # COMODO asks for this in scripts.
 blobref="tsa-blobs" # tsa = time stamp authority
+OUTPUT_DATE_FORMAT="%Y-%m-%d %H:%M:%S %z"
+TSA_DATE_FORMAT="%b %d %H:%M:%S %Y GMT"
+GIT_DATE_FORMAT="%Y-%m-%d %H:%M:%S %z"
 
 # Make sure the script was called from within a Git repo.  Ignore
 # stdout.
@@ -55,13 +58,17 @@ print_rev() {
 
 print_signed_timestamp() {
     tsatime="$(echo "$1" | grep -i "time stamp:" | cut -c13-)"
-    echo -e " $(date -j -f "%b %d %H:%M:%S %Y GMT" "$tsatime" +"SIGNED-%d-%b-%Y")"
+    output=$(date -j -f "$TSA_DATE_FORMAT" "$tsatime" \
+        +"$OUTPUT_DATE_FORMAT")
+    echo -e " SIGNED $output"
 }
 
 print_local_timestamp() {
     if $ltime; then
         ctime="$(git log --pretty=format:"%ad" --date=iso "$rev" -1)"
-        echo -e " $(date -j -f "%Y-%m-%d %H:%M:%S %z" "$ctime" +"COMMITTED-%d-%b-%Y")"
+        output=$(date -j -f "$GIT_DATE_FORMAT" "$ctime" \
+            +"$OUTPUT_DATE_FORMAT")
+        echo -e " COMMITTED $output"
     fi
 }
 
